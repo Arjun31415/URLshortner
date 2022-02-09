@@ -64,7 +64,7 @@ app.post('/api/shorturl', async (req, res) => {
     .then((resource) => {
       logger.info(resource);
     })
-    .catch((err) => res.json({ error: 'invalid url' }));
+    .catch(() => res.json({ error: 'invalid url' }));
 
   const urlCode = shortid.generate();
   try {
