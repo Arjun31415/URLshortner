@@ -1,93 +1,110 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-const validUrl = require("valid-url");
-const shortid = require("shortid");
-const dns = require("dns");
-const mongoose =require("mongoose");
+/* eslint-disable consistent-return */
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const validUrl = require('valid-url');
+const shortid = require('shortid');
+const dns = require('dns');
+const mongoose = require('mongoose');
 // Basic Configuration
 const app = express();
 const port = process.env.PORT || 3000;
+const Url = require('./models/url');
 
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 // parse application/json
 app.use(bodyParser.json());
-app.use("/public", express.static(`${process.cwd()}/public`));
+app.use('/public', express.static(`${process.cwd()}/public`));
 
-app.get("/", function (req, res) {
-  res.sendFile(process.cwd() + "/views/index.html");
-});
+app.get('/', (_, res) => res.sendFile(`${process.cwd()}/views/index.html`));
 
 // Your first API endpoint
-app.get("/api/hello", function (req, res) {
-  res.json({ greeting: "hello API" });
-});
+app.get('/api/hello', (req, res) => res.json({ greeting: 'hello API' }));
 
-
-
-async function initDb(){
-    await mongoose.connect("mongodb+srv://"+
-        process.env["USERNAME"]+":"+
-        encodeURIComponent(process.env["PASSWORD"])+
-        "@main.fjpwk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority")
+async function initDb() {
+  // console.log(encodeURIComponent(process.env.PASSWORD));
+  console.log(mongoose.connection.readyState); // logs 0
+  mongoose.connection.on('connecting', () => {
+    console.log('connecting');
+    console.log(mongoose.connection.readyState); // logs 2
+  });
+  mongoose.connection.on('connected', () => {
+    console.log('connected');
+    console.log(mongoose.connection.readyState); // logs 1
+  });
+  mongoose.connection.on('disconnecting', () => {
+    console.log('disconnecting');
+    console.log(mongoose.connection.readyState); // logs 3
+  });
+  mongoose.connection.on('disconnected', () => {
+    console.log('disconnected');
+    console.log(mongoose.connection.readyState); // logs 0
+  });
+  mongoose.connect(
+    `mongodb+srv://${process.env.USERNAME}:${encodeURIComponent(
+      process.env.PASSWORD,
+    )}@main.fjpwk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`,
+    { useNewUrlParser: true },
+  );
 }
 
-app.on('listening',async function(){
-    await initDb();
-})
-
-app.post("/api/shorturl", async function (req, res) {
+app.post('/api/shorturl', async (req, res) => {
   console.log(req.body);
-  longUrl = req.body["url"];
-  if (!validUrl.is_http_uri(longUrl) && !validUrl.is_https_uri(longUrl)) {
-    return res.status(401).json({ error: "invalid url" });
+  const longUrl = req.body.url;
+  if (!validUrl.isHttpUri(longUrl) && !validUrl.isHttpsUri(longUrl)) {
+    return res.status(401).json({ error: 'invalid url' });
   }
-  let f = 0;
+  const f = 0;
 
   try {
-    let domain = new URL(longUrl).hostname;
-    console.log({ domain: domain });
-    let _ = await dns.lookup(domain, (error) => {
+    const domain = new URL(longUrl).hostname;
+    console.log({ domain });
+    await dns.lookup(domain, (error) => {
       console.log(error);
       if (error) throw error;
     });
   } catch (err) {
     console.log(err);
-    return res.status(401).json({ error: "invalid url" });
+    return res.status(401).json({ error: 'invalid url' });
   }
   if (f) {
-    return res.status(401).json({ error: "invalid url" });
+    return res.status(401).json({ error: 'invalid url' });
   }
 
   const urlCode = shortid.generate();
   try {
-    let url = await db.get(longUrl);
+    let url = await Url.findOne({ longUrl });
 
     // url exist and return the respose
     if (url) {
-      return res.json(url);
-    } else {
-      await db.set(longUrl, urlCode).then(() => {});
-      await db.set(urlCode, longUrl).then(() => {});
-      return res.json({ original_url: longUrl, short_url: urlCode });
+      return res.json({ original_url: url.longUrl, short_url: url.urlCode });
     }
+    url = new Url({
+      longUrl,
+      urlCode,
+      date: new Date(),
+    });
+    await url.save();
+    return res.json({ original_url: url.longUrl, short_url: url.urlCode });
   } catch (err) {
     // exception handler
     console.log(err);
-    res.status(500).json("Server Error");
+    res.status(500).json('Server Error');
   }
 });
 
-app.get("/api/shorturl/:urlCode", async (req, res) => {
-  urlCode = req.params.urlCode;
-  db.get(urlCode).then((value) => {
-    console.log(value);
-    return res.redirect(value);
+app.get('/api/shorturl/:urlCode', async (req, res) => {
+  const { urlCode } = req.params;
+  Url.findOne({ urlCode }).then((value) => {
+    console.log({ value });
+    return res.redirect(value.longUrl);
   });
 });
 
-app.listen(port, function () {
+app.listen(port, async () => {
   console.log(`Listening on port ${port}`);
+  await initDb();
+  console.log('Initialized Database');
 });
