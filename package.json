@@ -13,7 +13,7 @@
     "dns": "^0.2.2",
     "dotenv": "^8.2.0",
     "express": "latest",
-    "mongoose": "^6.2.1",
+    "mongoose": "^6.4.6",
     "pino": "^7.6.5",
     "shortid": "^2.2.16",
     "valid-url": "^1.0.9"
